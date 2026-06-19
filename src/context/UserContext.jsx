@@ -4,7 +4,7 @@ const UserContext = createContext(null);
 
 export function UserProvider({ children }) {
   const [loggedUser, setLoggedUser] = useState(null);
-  const [isInitializing, setIsInitializing] = useState(true); // Controla o carregamento inicial
+  const [isInitializing, setIsInitializing] = useState(true);
 
   useEffect(() => {
     const saved = localStorage.getItem("loggedUser");
@@ -16,7 +16,7 @@ export function UserProvider({ children }) {
         localStorage.removeItem("loggedUser");
       }
     }
-    setIsInitializing(false); // Carregamento do localStorage finalizado
+    setIsInitializing(false);
   }, []);
 
   function login(user) {
@@ -29,13 +29,27 @@ export function UserProvider({ children }) {
     localStorage.removeItem("loggedUser");
   }
 
+  // Se estiver inicializando, renderiza um loader ou nada.
+  // Isso evita que componentes filhos tentem ler loggedUser antes da hora.
+  if (isInitializing) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-900 text-white">
+        <p>Carregando...</p>
+      </div>
+    );
+  }
+
   return (
-    <UserContext.Provider value={{ loggedUser, login, logout, isInitializing }}>
-      {!isInitializing && children} 
+    <UserContext.Provider value={{ loggedUser, login, logout }}>
+      {children}
     </UserContext.Provider>
   );
 }
 
 export function useUser() {
-  return useContext(UserContext);
+  const context = useContext(UserContext);
+  if (!context) {
+    throw new Error("useUser deve ser usado dentro de um UserProvider");
+  }
+  return context;
 }

@@ -47,9 +47,12 @@ export default function History() {
   return (
     <div className="min-h-screen bg-gray-50 p-6">
       <div className="max-w-xl mx-auto">
-        <button onClick={() => navigate("/")} className="text-gray-500 font-semibold mb-6 flex items-center hover:text-gray-800">
-          ← Voltar
-        </button>
+        <button
+  onClick={() => navigate("/dashboard")} // Força a volta para o dashboard
+  className="mb-6 text-gray-500 hover:text-gray-800 font-semibold flex items-center"
+>
+  ← Voltar
+</button>
 
         <h1 className="text-3xl font-black text-gray-900 mb-8">📜 Histórico</h1>
 

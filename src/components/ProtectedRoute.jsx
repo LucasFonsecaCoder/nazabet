@@ -1,17 +1,24 @@
 import { Navigate } from "react-router-dom";
 import { useUser } from "../context/UserContext";
 
-// Rota que qualquer usuário logado pode acessar
 export function PrivateRoute({ children }) {
-  const { loggedUser } = useUser();
-  if (!loggedUser) return <Navigate to="/login" />;
+  const { loggedUser, isInitializing } = useUser();
+  
+  // Se ainda estiver carregando do localStorage, não redirecione ainda
+  if (isInitializing) return null; 
+  
+  // Se finalizou o carregamento e não tem usuário, manda pro login
+  if (!loggedUser) return <Navigate to="/login" replace />;
+  
   return children;
 }
 
-// Rota exclusiva para admin
 export function AdminRoute({ children }) {
-  const { loggedUser } = useUser();
-  if (!loggedUser) return <Navigate to="/login" />;
-  if (!loggedUser.isAdmin) return <Navigate to="/" />;
+  const { loggedUser, isInitializing } = useUser();
+  
+  if (isInitializing) return null;
+  if (!loggedUser) return <Navigate to="/login" replace />;
+  if (!loggedUser.isAdmin) return <Navigate to="/dashboard" replace />;
+  
   return children;
 }

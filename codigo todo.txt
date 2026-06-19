@@ -1,0 +1,1962 @@
+vou te mandar os codigos que tenho atualmente pra facilitar o seu entendimento e vc me dizer exatamente onde devo colocar cada coisa e entender a sintaxe do meu projeto.
+
+protected route.jsx
+import { Navigate } from "react-router-dom";
+import { useUser } from "../context/UserContext";
+
+// Rota que qualquer usuário logado pode acessar
+export function PrivateRoute({ children }) {
+  const { loggedUser } = useUser();
+  if (!loggedUser) return <Navigate to="/login" />;
+  return children;
+}
+
+// Rota exclusiva para admin
+export function AdminRoute({ children }) {
+  const { loggedUser } = useUser();
+  if (!loggedUser) return <Navigate to="/login" />;
+  if (!loggedUser.isAdmin) return <Navigate to="/" />;
+  return children;
+}
+
+usercontext.jsx
+
+import { createContext, useContext, useState, useEffect } from "react";
+
+const UserContext = createContext(null);
+
+export function UserProvider({ children }) {
+  const [loggedUser, setLoggedUser] = useState(null);
+
+  useEffect(() => {
+    const saved = localStorage.getItem("loggedUser");
+    if (saved) setLoggedUser(JSON.parse(saved));
+  }, []);
+
+  function login(user) {
+    setLoggedUser(user);
+    localStorage.setItem("loggedUser", JSON.stringify(user));
+  }
+
+  function logout() {
+    setLoggedUser(null);
+    localStorage.removeItem("loggedUser");
+  }
+
+  return (
+    <UserContext.Provider value={{ loggedUser, login, logout }}>
+      {children}
+    </UserContext.Provider>
+  );
+}
+
+export function useUser() {
+  return useContext(UserContext);
+}
+
+
+managegames.jsx
+import { useState, useEffect } from "react";
+import {
+  collection,
+  addDoc,
+  getDocs,
+  updateDoc,
+  deleteDoc,
+  doc,
+  serverTimestamp,
+} from "firebase/firestore";
+
+import { Link } from "react-router-dom";
+import { db } from "../../firebase";
+
+export default function ManageGames() {
+  const [games, setGames] = useState([]);
+  const [users, setUsers] = useState([]);
+
+  const [teamAName, setTeamAName] = useState("");
+  const [teamBName, setTeamBName] = useState("");
+
+  const [selectedA, setSelectedA] = useState("");
+  const [selectedB, setSelectedB] = useState("");
+
+  const [teamAPlayers, setTeamAPlayers] = useState([]);
+  const [teamBPlayers, setTeamBPlayers] = useState([]);
+
+  async function loadData() {
+    const gamesSnap = await getDocs(
+      collection(db, "games")
+    );
+
+    const usersSnap = await getDocs(
+      collection(db, "users")
+    );
+
+    setGames(
+      gamesSnap.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+      }))
+    );
+
+    setUsers(
+      usersSnap.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+      }))
+    );
+  }
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  function addPlayerToTeamA() {
+    if (!selectedA) return;
+
+    const player = users.find(
+      u => u.id === selectedA
+    );
+
+    if (!player) return;
+
+    const existsInB = teamBPlayers.some(
+      p => p.id === player.id
+    );
+
+    if (existsInB) {
+      alert("Jogador já está no Time B.");
+      return;
+    }
+
+    const existsInA = teamAPlayers.some(
+      p => p.id === player.id
+    );
+
+    if (existsInA) return;
+
+    setTeamAPlayers([
+      ...teamAPlayers,
+      {
+        id: player.id,
+        name: player.name,
+      },
+    ]);
+  }
+
+  function addPlayerToTeamB() {
+    if (!selectedB) return;
+
+    const player = users.find(
+      u => u.id === selectedB
+    );
+
+    if (!player) return;
+
+    const existsInA = teamAPlayers.some(
+      p => p.id === player.id
+    );
+
+    if (existsInA) {
+      alert("Jogador já está no Time A.");
+      return;
+    }
+
+    const existsInB = teamBPlayers.some(
+      p => p.id === player.id
+    );
+
+    if (existsInB) return;
+
+    setTeamBPlayers([
+      ...teamBPlayers,
+      {
+        id: player.id,
+        name: player.name,
+      },
+    ]);
+  }
+
+  function removePlayerA(id) {
+    setTeamAPlayers(
+      teamAPlayers.filter(p => p.id !== id)
+    );
+  }
+
+  function removePlayerB(id) {
+    setTeamBPlayers(
+      teamBPlayers.filter(p => p.id !== id)
+    );
+  }
+
+  async function handleCreateGame() {
+    if (!teamAName.trim() || !teamBName.trim()) {
+      alert("Preencha os dois times.");
+      return;
+    }
+
+    await addDoc(collection(db, "games"), {
+  teamAName,
+  teamBName,
+
+  teamAPlayers,
+  teamBPlayers,
+
+  status: "open",
+
+  createdAt: serverTimestamp(),
+});
+
+    setTeamAName("");
+    setTeamBName("");
+
+    setTeamAPlayers([]);
+    setTeamBPlayers([]);
+
+    loadData();
+  }
+
+  async function finishGame(id) {
+    await updateDoc(doc(db, "games", id), {
+      status: "finished",
+    });
+
+    loadData();
+  }
+
+  async function deleteGame(id) {
+    const confirmed = window.confirm(
+      "Deseja excluir este jogo?"
+    );
+
+    if (!confirmed) return;
+
+    await deleteDoc(doc(db, "games", id));
+
+    loadData();
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-100 p-6">
+      <div className="max-w-5xl mx-auto">
+
+        <h1 className="text-3xl font-bold mb-6">
+          🏀 Gerenciar Jogos
+        </h1>
+
+        <div className="flex gap-3 mb-6">
+          <Link
+            to="/admin/users"
+            className="bg-blue-500 text-white px-4 py-2 rounded-xl"
+          >
+            👥 Usuários
+          </Link>
+
+          <Link
+            to="/admin/games"
+            className="bg-green-500 text-white px-4 py-2 rounded-xl"
+          >
+            🏀 Jogos
+          </Link>
+
+          <Link
+            to="/admin/markets"
+            className="bg-purple-500 text-white px-4 py-2 rounded-xl"
+          >
+            🎯 Odds
+          </Link>
+          <Link
+  to="/admin/results"
+  className="bg-orange-500 text-white px-4 py-2 rounded-xl"
+>
+  📊 Resultados
+</Link>
+        </div>
+
+        <div className="bg-white rounded-2xl shadow p-6 mb-6">
+
+          <h2 className="text-xl font-semibold mb-4">
+            Criar Novo Jogo
+          </h2>
+
+          <input
+            className="border rounded-lg px-4 py-2 w-full mb-3"
+            placeholder="Nome Time A"
+            value={teamAName}
+            onChange={(e) =>
+              setTeamAName(e.target.value)
+            }
+          />
+
+          <input
+            className="border rounded-lg px-4 py-2 w-full mb-4"
+            placeholder="Nome Time B"
+            value={teamBName}
+            onChange={(e) =>
+              setTeamBName(e.target.value)
+            }
+          />
+
+          <div className="grid md:grid-cols-2 gap-6">
+
+            <div>
+              <h3 className="font-semibold mb-2">
+                Time A
+              </h3>
+
+              <div className="flex gap-2 mb-3">
+                <select
+                  className="border rounded-lg px-3 py-2 flex-1"
+                  value={selectedA}
+                  onChange={(e) =>
+                    setSelectedA(e.target.value)
+                  }
+                >
+                  <option value="">
+                    Selecione
+                  </option>
+
+                  {users.map(user => (
+                    <option
+                      key={user.id}
+                      value={user.id}
+                    >
+                      {user.name}
+                    </option>
+                  ))}
+                </select>
+
+                <button
+                  onClick={addPlayerToTeamA}
+                  className="bg-blue-500 text-white px-4 rounded-lg"
+                >
+                  +
+                </button>
+              </div>
+
+              {teamAPlayers.map(player => (
+                <div
+                  key={player.id}
+                  className="flex justify-between items-center bg-gray-100 rounded-lg p-2 mb-2"
+                >
+                  <span>
+                    {player.name}
+                  </span>
+
+                  <button
+                    onClick={() =>
+                      removePlayerA(player.id)
+                    }
+                    className="text-red-500"
+                  >
+                    ❌
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            <div>
+              <h3 className="font-semibold mb-2">
+                Time B
+              </h3>
+
+              <div className="flex gap-2 mb-3">
+                <select
+                  className="border rounded-lg px-3 py-2 flex-1"
+                  value={selectedB}
+                  onChange={(e) =>
+                    setSelectedB(e.target.value)
+                  }
+                >
+                  <option value="">
+                    Selecione
+                  </option>
+
+                  {users.map(user => (
+                    <option
+                      key={user.id}
+                      value={user.id}
+                    >
+                      {user.name}
+                    </option>
+                  ))}
+                </select>
+
+                <button
+                  onClick={addPlayerToTeamB}
+                  className="bg-green-500 text-white px-4 rounded-lg"
+                >
+                  +
+                </button>
+              </div>
+
+              {teamBPlayers.map(player => (
+                <div
+                  key={player.id}
+                  className="flex justify-between items-center bg-gray-100 rounded-lg p-2 mb-2"
+                >
+                  <span>
+                    {player.name}
+                  </span>
+
+                  <button
+                    onClick={() =>
+                      removePlayerB(player.id)
+                    }
+                    className="text-red-500"
+                  >
+                    ❌
+                  </button>
+                </div>
+              ))}
+            </div>
+
+          </div>
+
+          <button
+            onClick={handleCreateGame}
+            className="mt-6 bg-green-500 hover:bg-green-600 text-white px-5 py-2 rounded-xl"
+          >
+            Criar Jogo
+          </button>
+
+        </div>
+
+        <div className="bg-white rounded-2xl shadow p-6">
+
+          <h2 className="text-xl font-semibold mb-4">
+            Jogos Criados
+          </h2>
+
+          {games.map(game => (
+            <div
+              key={game.id}
+              className="border rounded-xl p-4 mb-3"
+            >
+              <h3 className="font-bold text-lg">
+                {game.teamAName} x {game.teamBName}
+              </h3>
+
+              <p>
+                {game.status === "open"
+                  ? "🟢 Aberto"
+                  : "🔴 Encerrado"}
+              </p>
+
+              <div className="flex gap-2 mt-3">
+
+                {game.status === "open" && (
+                  <button
+                    onClick={() =>
+                      finishGame(game.id)
+                    }
+                    className="bg-red-500 text-white px-3 py-2 rounded-lg"
+                  >
+                    Encerrar
+                  </button>
+                )}
+
+                <button
+                  onClick={() =>
+                    deleteGame(game.id)
+                  }
+                  className="bg-gray-700 text-white px-3 py-2 rounded-lg"
+                >
+                  🗑 Excluir
+                </button>
+
+              </div>
+            </div>
+          ))}
+
+        </div>
+
+      </div>
+    </div>
+  );
+}
+
+manageusers.jsx
+import { useEffect, useState } from "react";
+import {
+  collection,
+  addDoc,
+  getDocs,
+  deleteDoc,
+  doc,
+  serverTimestamp,
+} from "firebase/firestore";
+
+import { Link } from "react-router-dom";
+import { db } from "../../firebase";
+
+export default function ManageUsers() {
+  const [name, setName] = useState("");
+  const [category, setCategory] = useState("regular");
+  const [users, setUsers] = useState([]);
+
+  async function loadUsers() {
+    const snapshot = await getDocs(collection(db, "users"));
+
+    const data = snapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...doc.data(),
+    }));
+
+    setUsers(data);
+  }
+
+  useEffect(() => {
+    loadUsers();
+  }, []);
+
+  async function handleAddUser() {
+    if (!name.trim()) return;
+
+    await addDoc(collection(db, "users"), {
+      name,
+      category,
+      balance: 20,
+      isAdmin: false,
+      createdAt: serverTimestamp(),
+    });
+
+    setName("");
+    setCategory("regular");
+
+    loadUsers();
+  }
+
+  async function handleDelete(id) {
+    await deleteDoc(doc(db, "users", id));
+
+    loadUsers();
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-100 p-6">
+      <div className="max-w-4xl mx-auto">
+
+        <h1 className="text-3xl font-bold mb-6">
+          👥 Gerenciar Usuários
+        </h1>
+
+        {/* MENU ADMIN */}
+        <div className="flex gap-3 mb-6">
+          <Link
+            to="/admin/users"
+            className="bg-blue-500 text-white px-4 py-2 rounded-xl"
+          >
+            👥 Usuários
+          </Link>
+
+          <Link
+            to="/admin/games"
+            className="bg-green-500 text-white px-4 py-2 rounded-xl"
+          >
+            🏀 Jogos
+          </Link>
+
+          <Link
+            to="/admin/markets"
+            className="bg-purple-500 text-white px-4 py-2 rounded-xl"
+          >
+            🎯 Odds
+          </Link>
+          <Link
+  to="/admin/results"
+  className="bg-orange-500 text-white px-4 py-2 rounded-xl"
+>
+  📊 Resultados
+</Link>
+        </div>
+
+        {/* NOVO USUÁRIO */}
+        <div className="bg-white rounded-2xl shadow p-6 mb-6">
+
+          <h2 className="text-xl font-semibold mb-4">
+            Novo Usuário
+          </h2>
+
+          <input
+            className="border rounded-lg px-4 py-2 w-full mb-3"
+            placeholder="Nome"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+          />
+
+          <select
+            className="border rounded-lg px-4 py-2 w-full mb-3"
+            value={category}
+            onChange={(e) => setCategory(e.target.value)}
+          >
+            <option value="star">⭐ Estrela</option>
+            <option value="regular">🔹 Regular</option>
+            <option value="support">🟢 Apoio</option>
+          </select>
+
+          <button
+            onClick={handleAddUser}
+            className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-xl"
+          >
+            Adicionar Usuário
+          </button>
+
+        </div>
+
+        {/* LISTA DE USUÁRIOS */}
+        <div className="grid gap-3">
+
+          {users.map((user) => (
+            <div
+              key={user.id}
+              className="bg-white rounded-2xl shadow p-4"
+            >
+              <div className="flex justify-between items-start">
+
+                <div>
+                  <h3 className="font-bold text-lg">
+                    {user.name}
+                  </h3>
+
+                  <p>
+                    💰 Saldo: R$ {user.balance}
+                  </p>
+
+                  <p>
+                    📊 Categoria: {user.category}
+                  </p>
+
+                  {user.isAdmin && (
+                    <p className="text-yellow-600 font-semibold">
+                      👑 Administrador
+                    </p>
+                  )}
+                </div>
+
+                {!user.isAdmin && (
+                  <button
+                    onClick={() => handleDelete(user.id)}
+                    className="bg-red-500 hover:bg-red-600 text-white px-3 py-2 rounded-lg"
+                  >
+                    Excluir
+                  </button>
+                )}
+
+              </div>
+            </div>
+          ))}
+
+        </div>
+
+      </div>
+    </div>
+  );
+}
+
+markets.jsx *inutil*
+export default function Markets() {
+  return (
+    <div className="p-6">
+      <h1 className="text-3xl font-bold">
+        🎯 Configuração de Odds
+      </h1>
+
+      <p>
+        Em desenvolvimento.
+      </p>
+    </div>
+  );
+}
+
+results.jsx
+import { useEffect, useState } from "react";
+import {
+  collection,
+  getDocs,
+  addDoc,
+  query,
+  where,
+} from "firebase/firestore";
+
+import { db } from "../../firebase";
+
+export default function Results() {
+  const [games, setGames] = useState([]);
+  const [selectedGame, setSelectedGame] = useState(null);
+  const [savedResults, setSavedResults] = useState({});
+  const [playerPoints, setPlayerPoints] = useState({});
+
+  useEffect(() => {
+    loadGames();
+  }, []);
+
+  async function loadGames() {
+    const snap = await getDocs(
+      collection(db, "games")
+    );
+
+    const finishedGames = snap.docs
+      .map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+      }))
+      .filter(game => game.status === "finished");
+
+    setGames(finishedGames);
+  }
+
+  async function loadSavedResults(gameId) {
+    const q = query(
+      collection(db, "playerResults"),
+      where("gameId", "==", gameId)
+    );
+
+    const snap = await getDocs(q);
+
+    const results = {};
+
+    snap.docs.forEach(doc => {
+      const data = doc.data();
+
+      results[data.playerId] = data.points;
+    });
+
+    setSavedResults(results);
+  }
+
+  function updatePoints(playerId, value) {
+    setPlayerPoints(prev => ({
+      ...prev,
+      [playerId]: Number(value),
+    }));
+  }
+
+  async function saveResults() {
+    const allPlayers = [
+      ...(selectedGame.teamAPlayers || []),
+      ...(selectedGame.teamBPlayers || []),
+    ];
+
+    for (const player of allPlayers) {
+      await addDoc(
+        collection(db, "playerResults"),
+        {
+          gameId: selectedGame.id,
+          playerId: player.id,
+          playerName: player.name,
+          points:
+            playerPoints[player.id] ??
+            savedResults[player.id] ??
+            0,
+        }
+      );
+    }
+
+    alert("Resultados salvos!");
+
+    loadSavedResults(selectedGame.id);
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-100 p-6">
+
+      <div className="max-w-4xl mx-auto">
+
+        <h1 className="text-3xl font-bold mb-6">
+          📊 Resultados
+        </h1>
+
+        {!selectedGame && (
+          <>
+            {games.length === 0 && (
+              <div className="bg-white p-6 rounded-2xl shadow">
+                Nenhum jogo finalizado.
+              </div>
+            )}
+
+            {games.map(game => (
+              <div
+                key={game.id}
+                onClick={() => {
+                  setSelectedGame(game);
+                  loadSavedResults(game.id);
+                }}
+                className="bg-white p-4 rounded-xl shadow mb-3 cursor-pointer hover:shadow-lg"
+              >
+                <h2 className="font-bold text-lg">
+                  {game.teamAName} x {game.teamBName}
+                </h2>
+              </div>
+            ))}
+          </>
+        )}
+
+        {selectedGame && (
+          <div className="bg-white rounded-2xl shadow p-6">
+
+            <h2 className="text-2xl font-bold mb-6">
+              {selectedGame.teamAName} x {selectedGame.teamBName}
+            </h2>
+
+            <div className="grid md:grid-cols-2 gap-8">
+
+              {/* TIME A */}
+              <div>
+
+                <h3 className="text-xl font-bold mb-4 text-blue-600">
+                  🔵 {selectedGame.teamAName}
+                </h3>
+
+                {selectedGame.teamAPlayers?.map(player => (
+                  <div
+                    key={player.id}
+                    className="flex justify-between items-center mb-3"
+                  >
+                    <span>
+                      {player.name}
+                    </span>
+
+                    <input
+                      type="number"
+                      min="0"
+                      className="border rounded-lg px-3 py-2 w-24"
+                      defaultValue={
+                        savedResults[player.id] || 0
+                      }
+                      onChange={(e) =>
+                        updatePoints(
+                          player.id,
+                          e.target.value
+                        )
+                      }
+                    />
+                  </div>
+                ))}
+
+              </div>
+
+              {/* TIME B */}
+              <div>
+
+                <h3 className="text-xl font-bold mb-4 text-red-600">
+                  🔴 {selectedGame.teamBName}
+                </h3>
+
+                {selectedGame.teamBPlayers?.map(player => (
+                  <div
+                    key={player.id}
+                    className="flex justify-between items-center mb-3"
+                  >
+                    <span>
+                      {player.name}
+                    </span>
+
+                    <input
+                      type="number"
+                      min="0"
+                      className="border rounded-lg px-3 py-2 w-24"
+                      defaultValue={
+                        savedResults[player.id] || 0
+                      }
+                      onChange={(e) =>
+                        updatePoints(
+                          player.id,
+                          e.target.value
+                        )
+                      }
+                    />
+                  </div>
+                ))}
+
+              </div>
+
+            </div>
+
+            <div className="flex gap-3 mt-6">
+
+              <button
+                onClick={() => setSelectedGame(null)}
+                className="bg-gray-500 text-white px-5 py-3 rounded-xl"
+              >
+                Voltar
+              </button>
+
+              <button
+                onClick={saveResults}
+                className="bg-green-500 text-white px-5 py-3 rounded-xl"
+              >
+                Salvar Resultados
+              </button>
+
+            </div>
+
+          </div>
+        )}
+
+      </div>
+
+    </div>
+  );
+}
+
+admin.jsx
+import { useState, useEffect } from "react";
+import {
+  collection, addDoc, getDocs,
+  updateDoc, deleteDoc, doc, serverTimestamp
+} from "firebase/firestore";
+import { db } from "../firebase";
+
+const CATEGORIES = [
+  { value: "star",    label: "⭐ Star"    },
+  { value: "regular", label: "🔹 Regular" },
+  { value: "support", label: "🟢 Support" },
+];
+
+const INITIAL_BALANCE = 20;
+
+export default function ManageUsers() {
+  const [users, setUsers] = useState([]);
+  const [name, setName] = useState("");
+  const [category, setCategory] = useState("regular");
+  const [editingId, setEditingId] = useState(null);
+  const [editData, setEditData] = useState({});
+  const [loading, setLoading] = useState(false);
+
+  async function loadUsers() {
+    const snap = await getDocs(collection(db, "users"));
+    setUsers(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+  }
+
+  useEffect(() => { loadUsers(); }, []);
+
+  async function addUser() {
+    if (!name.trim()) return;
+    setLoading(true);
+    await addDoc(collection(db, "users"), {
+      name: name.trim(),
+      category,
+      balance: INITIAL_BALANCE,
+      betsHistory: [],
+      winsHistory: [],
+      lossesHistory: [],
+      isAdmin: false,
+      createdAt: new Date().toISOString().split("T")[0],
+    });
+    setName("");
+    setCategory("regular");
+    await loadUsers();
+    setLoading(false);
+  }
+
+  function startEdit(user) {
+    setEditingId(user.id);
+    setEditData({ name: user.name, category: user.category, balance: user.balance });
+  }
+
+  async function saveEdit(id) {
+    await updateDoc(doc(db, "users", id), {
+      name: editData.name,
+      category: editData.category,
+      balance: Number(editData.balance),
+    });
+    setEditingId(null);
+    loadUsers();
+  }
+
+  async function removeUser(id) {
+    if (!confirm("Remover este usuário?")) return;
+    await deleteDoc(doc(db, "users", id));
+    loadUsers();
+  }
+
+  return (
+    <div className="p-4 max-w-2xl mx-auto">
+      <h1 className="text-2xl font-bold mb-6">👤 Gerenciar Usuários</h1>
+
+      {/* Formulário de adição */}
+      <div className="bg-white rounded-2xl shadow p-4 mb-6">
+        <h2 className="font-semibold mb-3">Adicionar Usuário</h2>
+        <div className="flex flex-col gap-2">
+          <input
+            className="border rounded-lg px-3 py-2"
+            placeholder="Nome do jogador"
+            value={name}
+            onChange={e => setName(e.target.value)}
+            onKeyDown={e => e.key === "Enter" && addUser()}
+          />
+          <select
+            className="border rounded-lg px-3 py-2"
+            value={category}
+            onChange={e => setCategory(e.target.value)}
+          >
+            {CATEGORIES.map(c => (
+              <option key={c.value} value={c.value}>{c.label}</option>
+            ))}
+          </select>
+          <button
+            className="bg-blue-600 text-white px-4 py-2 rounded-lg disabled:opacity-50"
+            onClick={addUser}
+            disabled={loading}
+          >
+            {loading ? "Adicionando..." : "Adicionar Usuário"}
+          </button>
+        </div>
+      </div>
+
+      {/* Lista de usuários */}
+      <div className="space-y-2">
+        {users.map(user => (
+          <div key={user.id} className="bg-white rounded-xl shadow p-4">
+            {editingId === user.id ? (
+              // Modo edição
+              <div className="flex flex-col gap-2">
+                <input
+                  className="border rounded px-2 py-1"
+                  value={editData.name}
+                  onChange={e => setEditData(p => ({ ...p, name: e.target.value }))}
+                />
+                <select
+                  className="border rounded px-2 py-1"
+                  value={editData.category}
+                  onChange={e => setEditData(p => ({ ...p, category: e.target.value }))}
+                >
+                  {CATEGORIES.map(c => (
+                    <option key={c.value} value={c.value}>{c.label}</option>
+                  ))}
+                </select>
+                <input
+                  type="number"
+                  className="border rounded px-2 py-1"
+                  value={editData.balance}
+                  onChange={e => setEditData(p => ({ ...p, balance: e.target.value }))}
+                  placeholder="Saldo"
+                />
+                <div className="flex gap-2">
+                  <button
+                    className="bg-green-500 text-white px-3 py-1 rounded flex-1"
+                    onClick={() => saveEdit(user.id)}
+                  >
+                    Salvar
+                  </button>
+                  <button
+                    className="bg-gray-300 px-3 py-1 rounded flex-1"
+                    onClick={() => setEditingId(null)}
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            ) : (
+              // Modo visualização
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-semibold">
+                    {CATEGORIES.find(c => c.value === user.category)?.label} {user.name}
+                  </p>
+                  <p className="text-sm text-gray-500">
+                    💰 {user.balance} moedas · Criado em {user.createdAt}
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    className="text-blue-500 text-sm border border-blue-300 px-2 py-1 rounded"
+                    onClick={() => startEdit(user)}
+                  >
+                    Editar
+                  </button>
+                  <button
+                    className="text-red-500 text-sm border border-red-300 px-2 py-1 rounded"
+                    onClick={() => removeUser(user.id)}
+                  >
+                    Remover
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+
+bet.jsx
+
+import { useEffect, useState } from "react";
+import {
+  collection,
+  getDocs,
+  addDoc,
+  updateDoc,
+  doc,
+} from "firebase/firestore";
+import { db } from "../firebase";
+import { useNavigate } from "react-router-dom";
+import { useUser } from "../context/UserContext";
+
+export default function Bet() {
+    const { loggedUser } = useUser();
+  const navigate = useNavigate();
+
+  const [games, setGames] = useState([]);
+  const [selectedGame, setSelectedGame] = useState(null);
+    const [selectedPlayer, setSelectedPlayer] = useState(null);
+    const [selectedMarket, setSelectedMarket] = useState(null);
+    const [stake, setStake] = useState("");
+
+  useEffect(() => {
+    loadGames();
+  }, []);
+
+  async function loadGames() {
+    const snapshot = await getDocs(
+      collection(db, "games")
+    );
+
+    const openGames = snapshot.docs
+      .map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+      }))
+      .filter(game => game.status === "open");
+
+    setGames(openGames);
+  }
+  async function handleBet() {
+
+  if (!stake || Number(stake) <= 0) {
+    alert("Digite um valor.");
+    return;
+  }
+
+  if (Number(stake) > loggedUser.balance) {
+    alert("Saldo insuficiente.");
+    return;
+  }
+
+  const possibleReturn =
+    Number(stake) * selectedMarket.odd;
+
+  await addDoc(
+    collection(db, "userBets"),
+    {
+      userId: loggedUser.id,
+      userName: loggedUser.name,
+
+      gameId: selectedGame.id,
+
+      playerId: selectedPlayer.id,
+      playerName: selectedPlayer.name,
+
+      marketType: selectedMarket.type,
+
+      line: selectedMarket.line,
+
+      odd: selectedMarket.odd,
+
+      stake: Number(stake),
+
+      possibleReturn,
+
+      status: "pending",
+
+      createdAt: new Date(),
+    }
+  );
+
+  await updateDoc(
+    doc(db, "users", loggedUser.id),
+    {
+      balance:
+        loggedUser.balance - Number(stake),
+    }
+  );
+
+  alert("Aposta realizada!");
+
+}
+  return (
+    <div className="min-h-screen bg-gray-100 p-6">
+
+      <div className="max-w-4xl mx-auto">
+
+        <h1 className="text-3xl font-bold mb-6">
+          🎯 Apostar
+        </h1>
+
+        <div className="mb-4">
+          <button
+            onClick={() => {
+              if (selectedPlayer) {
+                setSelectedPlayer(null);
+              } else if (selectedGame) {
+                setSelectedGame(null);
+              } else {
+                navigate("/");
+              }
+            }}
+            className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-xl"
+          >
+            ← Voltar
+          </button>
+        </div>
+
+        {!selectedGame && (
+          <>
+            {games.length === 0 && (
+              <div className="bg-white p-6 rounded-2xl shadow">
+                Nenhum jogo aberto.
+              </div>
+            )}
+
+            {games.map(game => (
+              <div
+                key={game.id}
+                onClick={() => setSelectedGame(game)}
+                className="bg-white rounded-2xl shadow p-6 mb-4 cursor-pointer hover:shadow-lg transition"
+              >
+                <h2 className="text-xl font-bold">
+                  {game.teamAName} x {game.teamBName}
+                </h2>
+
+                <p className="text-gray-500 mt-2">
+                  Clique para apostar
+                </p>
+              </div>
+            ))}
+          </>
+        )}
+
+        {selectedGame && !selectedPlayer && (
+          <div className="bg-white rounded-2xl shadow p-6">
+
+            <h2 className="text-2xl font-bold mb-6">
+              {selectedGame.teamAName} x {selectedGame.teamBName}
+            </h2>
+
+            <div className="grid md:grid-cols-2 gap-6">
+
+              <div>
+                <h3 className="font-bold text-lg mb-3">
+                  {selectedGame.teamAName}
+                </h3>
+
+                {selectedGame.teamAPlayers?.map(player => (
+                  <div
+                    key={player.id}
+                    onClick={() => setSelectedPlayer(player)}
+                    className="border rounded-xl p-3 mb-2 hover:bg-blue-100 cursor-pointer"
+                  >
+                    🏀 {player.name}
+                  </div>
+                ))}
+              </div>
+
+              <div>
+                <h3 className="font-bold text-lg mb-3">
+                  {selectedGame.teamBName}
+                </h3>
+
+                {selectedGame.teamBPlayers?.map(player => (
+                  <div
+                    key={player.id}
+                    onClick={() => setSelectedPlayer(player)}
+                    className="border rounded-xl p-3 mb-2 hover:bg-blue-100 cursor-pointer"
+                  >
+                    🏀 {player.name}
+                  </div>
+                ))}
+              </div>
+
+            </div>
+
+          </div>
+        )}
+
+        {selectedPlayer && (
+  <div className="bg-white rounded-2xl shadow p-6">
+
+    <h2 className="text-2xl font-bold mb-6">
+      🎯 Apostar em {selectedPlayer.name}
+    </h2>
+
+    <div className="bg-gray-50 rounded-xl p-4">
+
+      <h3 className="text-lg font-bold text-green-600 mb-3">
+        📈 Mais de X pontos
+      </h3>
+
+      <div className="grid md:grid-cols-2 gap-3">
+
+        <button
+          onClick={() =>
+            setSelectedMarket({
+              type: "over",
+              line: 2.5,
+              odd: 1.30,
+              label: "Mais de 2.5 pontos",
+            })
+          }
+          className="bg-green-100 hover:bg-green-200 p-3 rounded-xl"
+        >
+          Mais de 2.5 pontos (1.30)
+        </button>
+
+        <button
+          onClick={() =>
+            setSelectedMarket({
+              type: "over",
+              line: 4.5,
+              odd: 1.55,
+              label: "Mais de 4.5 pontos",
+            })
+          }
+          className="bg-green-100 hover:bg-green-200 p-3 rounded-xl"
+        >
+          Mais de 4.5 pontos (1.55)
+        </button>
+
+        <button
+          onClick={() =>
+            setSelectedMarket({
+              type: "over",
+              line: 6.5,
+              odd: 1.90,
+              label: "Mais de 6.5 pontos",
+            })
+          }
+          className="bg-green-100 hover:bg-green-200 p-3 rounded-xl"
+        >
+          Mais de 6.5 pontos (1.90)
+        </button>
+
+        <button
+          onClick={() =>
+            setSelectedMarket({
+              type: "over",
+              line: 8.5,
+              odd: 2.50,
+              label: "Mais de 8.5 pontos",
+            })
+          }
+          className="bg-green-100 hover:bg-green-200 p-3 rounded-xl"
+        >
+          Mais de 8.5 pontos (2.50)
+        </button>
+
+      </div>
+
+    </div>
+
+    <hr className="my-6" />
+
+    <div className="bg-gray-50 rounded-xl p-4">
+
+      <h3 className="text-lg font-bold text-red-600 mb-3">
+        📉 Menos de X pontos
+      </h3>
+
+      <div className="grid md:grid-cols-2 gap-3">
+
+        <button
+          onClick={() =>
+            setSelectedMarket({
+              type: "under",
+              line: 2.5,
+              odd: 2.20,
+              label: "Menos de 2.5 pontos",
+            })
+          }
+          className="bg-red-100 hover:bg-red-200 p-3 rounded-xl"
+        >
+          Menos de 2.5 pontos (2.20)
+        </button>
+
+        <button
+          onClick={() =>
+            setSelectedMarket({
+              type: "under",
+              line: 4.5,
+              odd: 1.50,
+              label: "Menos de 4.5 pontos",
+            })
+          }
+          className="bg-red-100 hover:bg-red-200 p-3 rounded-xl"
+        >
+          Menos de 4.5 pontos (1.50)
+        </button>
+
+        <button
+          onClick={() =>
+            setSelectedMarket({
+              type: "under",
+              line: 6.5,
+              odd: 1.30,
+              label: "Menos de 6.5 pontos",
+            })
+          }
+          className="bg-red-100 hover:bg-red-200 p-3 rounded-xl"
+        >
+          Menos de 6.5 pontos (1.30)
+        </button>
+
+        <button
+          onClick={() =>
+            setSelectedMarket({
+              type: "under",
+              line: 8.5,
+              odd: 1.10,
+              label: "Menos de 8.5 pontos",
+            })
+          }
+          className="bg-red-100 hover:bg-red-200 p-3 rounded-xl"
+        >
+          Menos de 8.5 pontos (1.10)
+        </button>
+
+      </div>
+
+    </div>
+
+    {selectedMarket && (
+      <div className="mt-6 bg-yellow-50 border border-yellow-300 rounded-2xl p-5">
+
+        <h3 className="font-bold text-xl mb-4">
+          🎟️ Sua aposta
+        </h3>
+
+        <p>
+          Jogador:
+          <strong> {selectedPlayer.name}</strong>
+        </p>
+
+        <p>
+          Mercado:
+          <strong> {selectedMarket.label}</strong>
+        </p>
+
+        <p>
+          Odd:
+          <strong> {selectedMarket.odd}</strong>
+        </p>
+
+        <input
+          type="number"
+          placeholder="Valor da aposta"
+          value={stake}
+          onChange={(e) => setStake(e.target.value)}
+          className="border rounded-lg px-4 py-2 w-full mt-4"
+        />
+
+        {stake && (
+          <p className="mt-4 text-lg">
+            Possível retorno:
+            <strong className="text-green-600">
+              {" "}
+              R$ {(Number(stake) * selectedMarket.odd).toFixed(2)}
+            </strong>
+          </p>
+        )}
+
+        <button
+          className="mt-4 bg-green-500 hover:bg-green-600 text-white px-5 py-3 rounded-xl"
+          onClick={handleBet}
+        >
+          Confirmar aposta
+        </button>
+
+      </div>
+    )}
+
+  </div>
+)}
+
+      </div>
+
+    </div>
+  );
+}
+
+dashboard.jsx
+import { useUser } from "../context/UserContext";
+import { useNavigate } from "react-router-dom";
+
+
+export default function Dashboard() {
+  const navigate = useNavigate();
+  const { loggedUser, logout } = useUser();
+
+  return (
+    <div className="min-h-screen bg-gray-100 p-6">
+      <div className="max-w-md mx-auto">
+
+        <h1 className="text-4xl font-bold text-center mb-8">
+          🏀 NazaBet
+        </h1>
+
+        <div className="bg-white rounded-2xl shadow p-6">
+  <h2 className="text-xl font-semibold">
+    Olá, {loggedUser?.name}! 👋
+  </h2>
+
+  <p className="mt-4 text-gray-500">
+    Seu saldo atual
+  </p>
+
+  <p className="text-4xl font-bold text-green-600">
+    R$ {loggedUser?.balance?.toFixed(2)}
+  </p>
+</div>
+<div className="grid grid-cols-2 gap-4 mt-4">
+
+  <button
+  onClick={() => navigate("/bet")}
+  className="bg-blue-500 text-white rounded-xl p-4"
+>
+  🎯 Apostar
+</button>
+
+  <button
+  onClick={() => navigate("/history")}
+  className="bg-purple-500 text-white rounded-xl p-4"
+>
+  📜 Histórico
+</button>
+
+</div>
+
+       <button
+  onClick={logout}
+  className="mt-4 w-full bg-red-500 hover:bg-red-600 text-white py-3 rounded-xl"
+>
+  Sair
+</button>
+
+      </div>
+    </div>
+  );
+}
+
+history.jsx
+import { useEffect, useState } from "react";
+import { collection, getDocs } from "firebase/firestore";
+import { db } from "../firebase";
+import { useUser } from "../context/UserContext";
+import { useNavigate } from "react-router-dom";
+import { deleteDoc, doc } from "firebase/firestore";
+
+export default function History() {
+  const { loggedUser } = useUser();
+  const navigate = useNavigate();
+  const [bets, setBets] = useState([]);
+
+  async function deleteBet(id) {
+  const confirmDelete = window.confirm(
+    "Deseja excluir esta aposta?"
+  );
+
+  if (!confirmDelete) return;
+
+  await deleteDoc(doc(db, "userBets", id));
+
+  loadBets();
+}
+  useEffect(() => {
+    loadBets();
+  }, []);
+
+  async function loadBets() {
+    const snapshot = await getDocs(
+      collection(db, "userBets")
+    );
+
+    const data = snapshot.docs
+      .map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+      }))
+      .filter(
+        bet => bet.userId === loggedUser.id
+      );
+
+    setBets(data);
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-100 p-6">
+
+      <div className="max-w-4xl mx-auto">
+
+        <button
+          onClick={() => navigate("/")}
+          className="bg-gray-500 text-white px-4 py-2 rounded-xl mb-6"
+        >
+          ← Voltar
+        </button>
+
+        <h1 className="text-3xl font-bold mb-6">
+          📜 Histórico de Apostas
+        </h1>
+
+        {bets.length === 0 && (
+          <div className="bg-white rounded-2xl shadow p-6">
+            Você ainda não fez apostas.
+          </div>
+        )}
+
+        {bets.map(bet => (
+          <div
+            key={bet.id}
+            className="bg-white rounded-2xl shadow p-6 mb-4"
+          >
+            <h2 className="text-xl font-bold">
+              {bet.playerName}
+            </h2>
+
+            <p className="text-gray-600">
+  {bet.marketType === "over"
+    ? `📈 Mais de ${bet.line} pontos`
+    : `📉 Menos de ${bet.line} pontos`}
+</p>
+
+            <p>
+              Odd: {bet.odd}
+            </p>
+
+            <p>
+  Valor apostado:
+  {" "}
+  R$ {bet.stake?.toFixed(2)}
+</p>
+
+<p>
+  Retorno possível:
+  {" "}
+  R$ {bet.possibleReturn?.toFixed(2)}
+</p>
+
+            <div className="mt-3">
+
+              {bet.status === "pending" && (
+                <span className="bg-yellow-100 text-yellow-700 px-3 py-1 rounded-full">
+                  🟡 Aguardando
+                </span>
+              )}
+
+              {bet.status === "won" && (
+                <span className="bg-green-100 text-green-700 px-3 py-1 rounded-full">
+                  🟢 Ganha
+                </span>
+              )}
+
+              {bet.status === "lost" && (
+                <span className="bg-red-100 text-red-700 px-3 py-1 rounded-full">
+                  🔴 Perdida
+                </span>
+              )}
+
+            </div>
+            <button
+  onClick={() => deleteBet(bet.id)}
+  className="mt-3 bg-red-500 text-white px-3 py-2 rounded-lg"
+>
+  🗑 Excluir aposta
+</button>
+<p className="text-sm text-gray-500">
+  {bet.createdAt?.toDate().toLocaleString("pt-BR")}
+</p>
+          </div>
+          
+        ))}
+
+      </div>
+
+    </div>
+  );
+}
+
+login.jsx
+import { useState, useEffect } from "react";
+import { collection, getDocs } from "firebase/firestore";
+import { db } from "../firebase";
+import { useNavigate } from "react-router-dom";
+import { useUser } from "../context/UserContext";
+
+export default function Login() {
+  const [query, setQuery] = useState("");
+  const [allUsers, setAllUsers] = useState([]);
+  const [suggestions, setSuggestions] = useState([]);
+  const { login } = useUser();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    getDocs(collection(db, "users")).then(snap => {
+      setAllUsers(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
+  }, []);
+
+  function handleInput(e) {
+    const val = e.target.value;
+    setQuery(val);
+    if (val.length < 2) { setSuggestions([]); return; }
+    setSuggestions(
+      allUsers.filter(u =>
+        u.name.toLowerCase().includes(val.toLowerCase())
+      )
+    );
+  }
+
+  function handleSelect(user) {
+    login(user);
+    navigate(user.isAdmin ? "/admin/users" : "/");
+  }
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
+      <div className="w-full max-w-sm bg-white rounded-2xl shadow p-6">
+        <h1 className="text-3xl font-bold text-center mb-2">NazaBet🏀</h1>
+        <h2 className="text-xl font-semibold text-center mb-6">Quem é você?</h2>
+
+        <input
+          className="border rounded-lg px-4 py-2 w-full mb-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          placeholder="Digite seu nome..."
+          value={query}
+          onChange={handleInput}
+          autoFocus
+        />
+
+        {suggestions.length > 0 && (
+          <ul className="border rounded-lg shadow overflow-hidden">
+            {suggestions.map(u => (
+              <li
+                key={u.id}
+                className="px-4 py-3 hover:bg-blue-50 cursor-pointer flex items-center gap-2 border-b last:border-0"
+                onClick={() => handleSelect(u)}
+              >
+                <span>{u.name}</span>
+                {u.isAdmin && (
+                  <span className="ml-auto text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full">
+                    Admin
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {query.length >= 2 && suggestions.length === 0 && (
+          <p className="text-sm text-gray-400 text-center mt-2">
+            Nenhum usuário encontrado.
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+
+user.jsx
+import { useState, useEffect } from "react";
+import { db } from "../firebase";
+import {
+  collection, addDoc, onSnapshot, query, where, orderBy
+} from "firebase/firestore";
+
+const SALDO_INICIAL = 20;
+
+export default function UserPanel({ user, onLogout }) {
+  const [bets, setBets]         = useState([]);
+  const [myBets, setMyBets]     = useState([]);
+  const [selectedBet, setSelectedBet] = useState(null);
+  const [amount, setAmount]     = useState("");
+
+  // Saldo calculado dinamicamente pelas apostas
+  const spent = myBets.reduce((acc, b) => acc + b.amount, 0);
+  const won   = myBets.filter(b => b.result === "ganha").reduce((acc, b) => acc + b.payout, 0);
+  const balance = parseFloat((SALDO_INICIAL - spent + won).toFixed(2));
+
+  // ── MERCADOS ABERTOS ──
+  useEffect(() => {
+    const q = query(collection(db, "bets"), where("status", "==", "aberta"), orderBy("createdAt", "desc"));
+    return onSnapshot(q, snap => setBets(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
+  }, []);
+
+  // ── MINHAS APOSTAS (tempo real p/ receber resultado) ──
+  useEffect(() => {
+    if (!user.nome) return;
+    const q = query(collection(db, "userBets"), where("userName", "==", user.nome), orderBy("createdAt", "desc"));
+    return onSnapshot(q, snap => setMyBets(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
+  }, [user.nome]);
+
+  // ── FAZER APOSTA ──
+  const placeBet = async () => {
+    const value = parseFloat(amount);
+    if (!selectedBet || isNaN(value) || value <= 0 || value > balance) return;
+    const payout = parseFloat((value * selectedBet.odd).toFixed(2));
+    await addDoc(collection(db, "userBets"), {
+      userName: user.nome,
+      betId: selectedBet.id,
+      description: selectedBet.description,
+      odd: selectedBet.odd,
+      amount: value,
+      potentialPayout: payout,
+      payout: 0,
+      result: "pendente",
+      createdAt: Date.now()
+    });
+    setSelectedBet(null);
+    setAmount("");
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-900 text-white p-4">
+      {/* Header */}
+      <div className="flex justify-between items-center mb-6">
+        <div>
+          <h1 className="text-xl font-bold">👋 {user.nome}</h1>
+          <p className="text-green-400 font-bold text-lg">R$ {balance.toFixed(2)}</p>
+        </div>
+        <button onClick={onLogout} className="text-sm text-gray-400 hover:text-white">Sair</button>
+      </div>
+
+      {/* Apostas disponíveis */}
+      <h2 className="font-bold text-lg mb-3">Apostas Disponíveis</h2>
+      {bets.length === 0 && <p className="text-gray-400 mb-6">Nenhuma aposta disponível no momento.</p>}
+      <div className="space-y-2 mb-6">
+        {bets.map(b => (
+          <button key={b.id} onClick={() => setSelectedBet(b)}
+            className={`w-full text-left bg-gray-800 hover:bg-gray-700 rounded-xl p-4 transition border-2 ${
+              selectedBet?.id === b.id ? "border-blue-500" : "border-transparent"
+            }`}>
+            <p className="font-bold">{b.description}</p>
+            <p className="text-sm text-gray-400">{b.gameLabel}</p>
+            <p className="text-blue-400 font-bold">Odd: {b.odd}x</p>
+          </button>
+        ))}
+      </div>
+
+      {/* Formulário */}
+      {selectedBet && (
+        <div className="bg-gray-800 rounded-2xl p-4 mb-6 space-y-3">
+          <p className="font-bold">🎯 {selectedBet.description}</p>
+          <p className="text-blue-400">Odd: {selectedBet.odd}x</p>
+          <input type="number" placeholder="Valor da aposta (R$)" value={amount}
+            onChange={e => setAmount(e.target.value)}
+            className="w-full bg-gray-700 rounded-xl px-4 py-3 outline-none" />
+          {amount && !isNaN(parseFloat(amount)) && (
+            <p className="text-green-400 text-sm">
+              Ganho potencial: R$ {(parseFloat(amount) * selectedBet.odd).toFixed(2)}
+            </p>
+          )}
+          <button onClick={placeBet}
+            className="w-full bg-blue-600 hover:bg-blue-700 py-3 rounded-xl font-bold">
+            Confirmar Aposta
+          </button>
+        </div>
+      )}
+
+      {/* Minhas apostas */}
+      <h2 className="font-bold text-lg mb-3">Minhas Apostas</h2>
+      {myBets.length === 0 && <p className="text-gray-400">Você ainda não apostou nada.</p>}
+      <div className="space-y-2">
+        {myBets.map(b => (
+          <div key={b.id} className="bg-gray-800 rounded-xl p-4">
+            <p className="font-bold">{b.description}</p>
+            <p className="text-sm text-gray-400">
+              Apostado: R$ {b.amount.toFixed(2)} · Odd: {b.odd}x · Potencial: R$ {b.potentialPayout.toFixed(2)}
+            </p>
+            {b.result === "ganha" && (
+              <p className="text-green-400 text-sm font-bold">+R$ {b.payout.toFixed(2)} recebido!</p>
+            )}
+            <span className={`text-xs font-bold px-2 py-1 rounded-full mt-1 inline-block ${
+              b.result === "pendente" ? "bg-yellow-600" :
+              b.result === "ganha"   ? "bg-green-600" : "bg-red-600"
+            }`}>
+              {b.result.toUpperCase()}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+app.jsx
+import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { UserProvider } from "./context/UserContext";
+import { PrivateRoute, AdminRoute } from "./components/ProtectedRoute";
+import Dashboard from "./pages/Dashboard";
+import Login from "./pages/Login";
+import ManageUsers from "./pages/admin/ManageUsers";
+import ManageGames from "./pages/admin/ManageGames";
+import Markets from "./pages/admin/Markets";
+import Bet from "./pages/Bet";
+import History from "./pages/History";
+import Results from "./pages/admin/Results";
+
+export default function App() {
+  return (
+    <UserProvider>
+      <BrowserRouter>
+        <Routes>
+          {/* Pública */}
+          <Route path="/login" element={<Login />} />
+          {/* Admin */}
+          <Route path="/admin/users" element={<AdminRoute><ManageUsers /></AdminRoute>} />
+          <Route
+  path="/"
+  element={
+    <PrivateRoute>
+      <Dashboard />
+    </PrivateRoute>
+    
+  }
+/>
+<Route
+  path="/history"
+  element={
+    <PrivateRoute>
+      <History />
+    </PrivateRoute>
+  }
+/>
+<Route
+  path="/admin/games"
+  element={
+    <AdminRoute>
+      <ManageGames />
+    </AdminRoute>
+  }
+/>
+<Route
+  path="/admin/results"
+  element={
+    <AdminRoute>
+      <Results />
+    </AdminRoute>
+  }
+/>
+<Route
+  path="/bet"
+  element={
+    <PrivateRoute>
+      <Bet />
+    </PrivateRoute>
+  }
+/>
+<Route
+  path="/admin/markets"
+  element={
+    <AdminRoute>
+      <Markets />
+    </AdminRoute>
+  }
+/>
+        </Routes>
+      </BrowserRouter>
+    </UserProvider>
+  );
+}

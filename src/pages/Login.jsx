@@ -1,83 +1,87 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { collection, getDocs } from "firebase/firestore";
+import { db } from "../firebase";
+import { useNavigate } from "react-router-dom";
+import { useUser } from "../context/UserContext";
 
-const ADMIN_USER = "admin";
-const ADMIN_PASS = "naza123";
+export default function Login() {
+  const [query, setQuery] = useState("");
+  const [allUsers, setAllUsers] = useState([]);
+  const [suggestions, setSuggestions] = useState([]);
+  const { login } = useUser();
+  const navigate = useNavigate();
 
-export default function Login({ onLogin }) {
-  const [nome, setNome] = useState("");
-  const [senha, setSenha] = useState("");
-  const [erro, setErro] = useState("");
-  const [isAdmin, setIsAdmin] = useState(false);
+  useEffect(() => {
+    getDocs(collection(db, "users")).then((snap) => {
+      setAllUsers(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    });
+  }, []);
 
-  function handleEntrar() {
-    if (isAdmin) {
-      if (nome === ADMIN_USER && senha === ADMIN_PASS) {
-        onLogin({ nome: "Admin", role: "admin" });
-      } else {
-        setErro("Usuário ou senha incorretos.");
-      }
-    } else {
-      if (!nome.trim()) {
-        setErro("Digite seu nome.");
-        return;
-      }
-      onLogin({ nome: nome.trim(), role: "user" });
+  function handleInput(e) {
+    const val = e.target.value;
+    setQuery(val);
+    if (val.length < 2) {
+      setSuggestions([]);
+      return;
     }
+    setSuggestions(
+      allUsers.filter((u) => u.name.toLowerCase().includes(val.toLowerCase()))
+    );
+  }
+
+  function handleSelect(user) {
+    login(user);
+    navigate(user.isAdmin ? "/admin/users" : "/");
   }
 
   return (
-    <div className="min-h-screen bg-gray-950 flex flex-col items-center justify-center px-4">
-      {/* Logo centralizada */}
-      <div className="mb-8 text-center">
-        <h1 className="text-5xl font-extrabold text-yellow-400 tracking-widest drop-shadow-lg">
-          NazaBet
-        </h1>
-        <p className="text-gray-400 mt-2 text-sm">Faça sua aposta e boa sorte!</p>
-      </div>
-
-      {/* Card */}
-      <div className="bg-gray-900 border border-gray-800 rounded-2xl p-8 w-full max-w-sm shadow-xl">
-        <h2 className="text-white text-xl font-bold mb-6 text-center">
-          {isAdmin ? "🔐 Entrar como Admin" : "🎯 Entrar para Apostar"}
-        </h2>
-
-        <div className="flex flex-col gap-4">
-          <input
-            type="text"
-            placeholder={isAdmin ? "Usuário" : "Seu nome"}
-            value={nome}
-            onChange={(e) => { setNome(e.target.value); setErro(""); }}
-            className="bg-gray-800 text-white rounded-lg px-4 py-3 outline-none focus:ring-2 focus:ring-yellow-400 placeholder-gray-500"
-          />
-
-          {isAdmin && (
-            <input
-              type="password"
-              placeholder="Senha"
-              value={senha}
-              onChange={(e) => { setSenha(e.target.value); setErro(""); }}
-              className="bg-gray-800 text-white rounded-lg px-4 py-3 outline-none focus:ring-2 focus:ring-yellow-400 placeholder-gray-500"
-            />
-          )}
-
-          {erro && (
-            <p className="text-red-400 text-sm text-center">{erro}</p>
-          )}
-
-          <button
-            onClick={handleEntrar}
-            className="bg-yellow-400 hover:bg-yellow-300 text-gray-950 font-bold py-3 rounded-lg transition-all"
-          >
-            Entrar
-          </button>
-
-          <button
-            onClick={() => { setIsAdmin(!isAdmin); setErro(""); setNome(""); setSenha(""); }}
-            className="text-gray-400 hover:text-yellow-400 text-sm text-center transition-all"
-          >
-            {isAdmin ? "← Voltar para apostar" : "Entrar como Admin"}
-          </button>
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-600 to-indigo-800 p-6">
+      <div className="w-full max-w-sm bg-white rounded-3xl shadow-2xl p-8">
+        
+        {/* Logo/Título */}
+        <div className="text-center mb-8">
+          <div className="text-6xl mb-4">🏀</div>
+          <h1 className="text-4xl font-black text-gray-900 tracking-tight">NazaBet</h1>
+          <p className="text-gray-500 font-medium mt-2">Bem-vindo!</p>
         </div>
+
+        {/* Input de Busca */}
+        <div className="relative mb-6">
+          <input
+            className="w-full bg-gray-50 border border-gray-200 rounded-2xl px-5 py-4 text-lg focus:outline-none focus:ring-4 focus:ring-blue-100 transition-all"
+            placeholder="Digite seu nome..."
+            value={query}
+            onChange={handleInput}
+            autoFocus
+          />
+        </div>
+
+        {/* Sugestões */}
+        {suggestions.length > 0 && (
+          <div className="bg-white border border-gray-100 rounded-2xl shadow-xl overflow-hidden animate-in fade-in zoom-in duration-200">
+            {suggestions.map((u) => (
+              <button
+                key={u.id}
+                className="w-full text-left px-5 py-4 hover:bg-blue-50 transition-colors flex items-center justify-between border-b border-gray-50 last:border-0"
+                onClick={() => handleSelect(u)}
+              >
+                <span className="font-bold text-gray-800">{u.name}</span>
+                {u.isAdmin && (
+                  <span className="text-[10px] uppercase tracking-widest bg-red-100 text-red-600 px-2 py-0.5 rounded-md font-bold">
+                    Admin
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Feedback de busca */}
+        {query.length >= 2 && suggestions.length === 0 && (
+          <p className="text-sm text-gray-400 text-center mt-2">
+            Usuário não encontrado.
+          </p>
+        )}
       </div>
     </div>
   );

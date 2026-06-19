@@ -4,14 +4,15 @@ import {
 } from "firebase/firestore";
 import { db } from "../../firebase";
 import { Link } from "react-router-dom";
+import { useUser } from "../../context/UserContext"; // Importação necessária
 
 export default function Results() {
+  const { loggedUser } = useUser(); // Adicionado
   const [games, setGames] = useState([]);
   const [selectedGame, setSelectedGame] = useState(null);
   const [savedResults, setSavedResults] = useState({});
   const [playerPoints, setPlayerPoints] = useState({});
 
-  // Menu padronizado unificado
   const adminLinks = [
     { label: "👥 Usuários", path: "/admin/users", bg: "bg-blue-600" },
     { label: "🏀 Jogos", path: "/admin/games", bg: "bg-green-600" },
@@ -19,7 +20,12 @@ export default function Results() {
     { label: "🏆 Ranking", path: "/admin/ranking", bg: "bg-purple-600" }
   ];
 
-  useEffect(() => { loadGames(); }, []);
+  // AQUI A MUDANÇA: O loadGames reage ao loggedUser
+  useEffect(() => {
+    if (loggedUser) {
+      loadGames();
+    }
+  }, [loggedUser]);
 
   async function loadGames() {
     const snap = await getDocs(collection(db, "games"));
@@ -49,12 +55,11 @@ export default function Results() {
   }
 
   async function saveResults() {
-    if (!selectedGame) return;
+    if (!selectedGame || !loggedUser) return; // Segurança extra
     const allPlayers = [...(selectedGame.teamAPlayers || []), ...(selectedGame.teamBPlayers || [])];
     const batch = writeBatch(db);
 
     for (const player of allPlayers) {
-      // Segurança: Não processar pontos para o admin
       if (String(player.id) === "5550123") continue;
 
       const resultRef = doc(collection(db, "playerResults"));
@@ -87,25 +92,19 @@ export default function Results() {
       <div className="max-w-4xl mx-auto">
         <h1 className="text-3xl font-black text-gray-900 mb-8">📊 Processamento de Resultados</h1>
         
-        {/* MENU PADRONIZADO */}
-        {/* MENU PADRONIZADO ATUALIZADO */}
-<div className="flex flex-wrap gap-3 mb-8 pb-2">
-  {adminLinks.map(item => (
-    <Link key={item.path} to={item.path} className={`${item.bg} text-white px-5 py-2 rounded-xl font-bold hover:opacity-90 transition-all whitespace-nowrap`}>
-      {item.label}
-    </Link>
-  ))}
-  
-  {/* Botão de Zerar */}
-  <button onClick={resetAllPoints} className="bg-red-600 text-white px-5 py-2 rounded-xl font-bold hover:bg-red-700 transition-all whitespace-nowrap">
-    ⚠️ Zerar Ranking
-  </button>
-
-  {/* BOTÃO DE SAIR / LOGIN */}
-  <Link to="/" className="bg-gray-800 text-white px-5 py-2 rounded-xl font-bold hover:bg-black transition-all ml-auto">
-    ⬅️ Sair
-  </Link>
-</div>
+        <div className="flex flex-wrap gap-3 mb-8 pb-2">
+          {adminLinks.map(item => (
+            <Link key={item.path} to={item.path} className={`${item.bg} text-white px-5 py-2 rounded-xl font-bold hover:opacity-90 transition-all whitespace-nowrap`}>
+              {item.label}
+            </Link>
+          ))}
+          <button onClick={resetAllPoints} className="bg-red-600 text-white px-5 py-2 rounded-xl font-bold hover:bg-red-700 transition-all whitespace-nowrap">
+            ⚠️ Zerar Ranking
+          </button>
+          <Link to="/" className="bg-gray-800 text-white px-5 py-2 rounded-xl font-bold hover:bg-black transition-all ml-auto">
+            ⬅️ Sair
+          </Link>
+        </div>
 
         {!selectedGame ? (
           <div className="grid gap-4">
@@ -129,7 +128,6 @@ export default function Results() {
                 <div key={idx} className="space-y-4">
                   <h3 className={`font-bold uppercase text-${team.color}-600`}>{team.name}</h3>
                   {team.players?.map(p => (
-                    // Filtro de segurança: Não renderiza o admin na lista de resultados
                     String(p.id) !== "5550123" && (
                       <div key={p.id} className="flex justify-between items-center bg-gray-50 p-3 rounded-2xl">
                         <span className="font-medium text-sm">{p.name}</span>

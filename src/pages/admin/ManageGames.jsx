@@ -2,8 +2,10 @@ import { useEffect, useState } from "react";
 import { collection, addDoc, getDocs, updateDoc, deleteDoc, doc, serverTimestamp, writeBatch } from "firebase/firestore";
 import { Link } from "react-router-dom";
 import { db } from "../../firebase";
+import { useUser } from "../../context/UserContext"; // Importamos o hook
 
 export default function ManageGames() {
+  const { loggedUser } = useUser(); // Pegamos o loggedUser
   const [games, setGames] = useState([]);
   const [users, setUsers] = useState([]);
   const [teamAName, setTeamAName] = useState("");
@@ -27,6 +29,12 @@ export default function ManageGames() {
     setUsers(usersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })).filter(u => String(u.id) !== "5550123"));
   }
 
+  // AQUI A MUDANÇA: O loadData roda quando o componente monta, 
+  // mas garantimos que a página só funcione se houver um admin logado (opcional, mas recomendado)
+  useEffect(() => {
+    loadData();
+  }, []);
+
   async function resetAllPoints() {
     if (!window.confirm("CUIDADO: Isso vai apagar TODOS os pontos do ranking. Tem certeza?")) return;
     const querySnapshot = await getDocs(collection(db, "playerResults"));
@@ -37,9 +45,6 @@ export default function ManageGames() {
     window.location.reload();
   }
 
-  useEffect(() => { loadData(); }, []);
-
-  // CORREÇÃO: Adicionando a categoria aqui
   function addPlayerToTeamA() {
     if (!selectedA) return;
     const player = users.find(u => u.id === selectedA);
@@ -51,7 +56,6 @@ export default function ManageGames() {
     }]);
   }
 
-  // CORREÇÃO: Adicionando a categoria aqui
   function addPlayerToTeamB() {
     if (!selectedB) return;
     const player = users.find(u => u.id === selectedB);
@@ -89,6 +93,7 @@ export default function ManageGames() {
           </Link>
         </div>
 
+        {/* ... restante do seu JSX permanece igual ... */}
         <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-8 mb-8">
           <h2 className="text-xl font-bold mb-6">Criar Novo Jogo</h2>
           <div className="grid md:grid-cols-2 gap-4 mb-6">

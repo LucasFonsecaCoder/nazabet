@@ -2,13 +2,14 @@ import { useEffect, useState } from "react";
 import { collection, addDoc, getDocs, deleteDoc, doc, serverTimestamp, writeBatch } from "firebase/firestore";
 import { Link } from "react-router-dom";
 import { db } from "../../firebase";
+import { useUser } from "../../context/UserContext"; // Importe o hook
 
 export default function ManageUsers() {
+  const { loggedUser } = useUser(); // Hook para verificar sessão
   const [name, setName] = useState("");
   const [category, setCategory] = useState("regular");
   const [users, setUsers] = useState([]);
 
-  // Menu Administrativo Unificado
   const adminLinks = [
     { label: "👥 Usuários", path: "/admin/users", bg: "bg-blue-600" },
     { label: "🏀 Jogos", path: "/admin/games", bg: "bg-green-600" },
@@ -20,6 +21,13 @@ export default function ManageUsers() {
     const snapshot = await getDocs(collection(db, "users"));
     setUsers(snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })));
   }
+
+  // AQUI A MUDANÇA: O loadUsers reage ao loggedUser
+  useEffect(() => {
+    if (loggedUser) {
+      loadUsers();
+    }
+  }, [loggedUser]);
 
   async function resetAllPoints() {
     if (!window.confirm("CUIDADO: Isso vai apagar TODOS os pontos do ranking. Tem certeza?")) return;
@@ -50,34 +58,25 @@ export default function ManageUsers() {
     loadUsers();
   }
 
-  useEffect(() => { loadUsers(); }, []);
-
   return (
     <div className="min-h-screen bg-gray-100 p-6">
       <div className="max-w-4xl mx-auto">
         <h1 className="text-3xl font-black text-gray-900 mb-8">⚙️ Painel Administrativo</h1>
 
-        {/* MENU PADRONIZADO */}
-        {/* MENU PADRONIZADO ATUALIZADO */}
-<div className="flex flex-wrap gap-3 mb-8 pb-2">
-  {adminLinks.map(item => (
-    <Link key={item.path} to={item.path} className={`${item.bg} text-white px-5 py-2 rounded-xl font-bold hover:opacity-90 transition-all whitespace-nowrap`}>
-      {item.label}
-    </Link>
-  ))}
-  
-  {/* Botão de Zerar */}
-  <button onClick={resetAllPoints} className="bg-red-600 text-white px-5 py-2 rounded-xl font-bold hover:bg-red-700 transition-all whitespace-nowrap">
-    ⚠️ Zerar Ranking
-  </button>
+        <div className="flex flex-wrap gap-3 mb-8 pb-2">
+          {adminLinks.map(item => (
+            <Link key={item.path} to={item.path} className={`${item.bg} text-white px-5 py-2 rounded-xl font-bold hover:opacity-90 transition-all whitespace-nowrap`}>
+              {item.label}
+            </Link>
+          ))}
+          <button onClick={resetAllPoints} className="bg-red-600 text-white px-5 py-2 rounded-xl font-bold hover:bg-red-700 transition-all whitespace-nowrap">
+            ⚠️ Zerar Ranking
+          </button>
+          <Link to="/" className="bg-gray-800 text-white px-5 py-2 rounded-xl font-bold hover:bg-black transition-all ml-auto">
+            ⬅️ Sair
+          </Link>
+        </div>
 
-  {/* BOTÃO DE SAIR / LOGIN */}
-  <Link to="/" className="bg-gray-800 text-white px-5 py-2 rounded-xl font-bold hover:bg-black transition-all ml-auto">
-    ⬅️ Sair
-  </Link>
-</div>
-
-        {/* NOVO USUÁRIO */}
         <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-8 mb-8">
           <h2 className="text-xl font-bold mb-6">Novo Usuário</h2>
           <div className="grid md:grid-cols-3 gap-4">
@@ -105,10 +104,8 @@ export default function ManageUsers() {
           </div>
         </div>
 
-        {/* LISTA DE USUÁRIOS */}
         <div className="grid md:grid-cols-2 gap-4">
           {users.map((user) => (
-            // Adicionado filtro para não exibir o admin '5550123' na listagem
             user.id !== "5550123" && (
               <div key={user.id} className="bg-white rounded-3xl shadow-sm border border-gray-100 p-6 flex justify-between items-center transition-all hover:shadow-md">
                 <div>
